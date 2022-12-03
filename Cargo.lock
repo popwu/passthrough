@@ -3,6 +3,16 @@
 version = 3
 
 [[package]]
+name = "Passthrough"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "anyhow"
 version = "1.0.66"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -250,16 +260,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "transfer"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bincode",
- "serde",
- "tokio",
 ]
 
 [[package]]
