@@ -1,6 +1,7 @@
 // use tokio::net::UdpSocket;
 use anyhow::{Ok, Result};
 use bincode;
+use tokio::net::UdpSocket;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -19,9 +20,24 @@ pub struct Server {
     pub config: Arc<Mutex<GlobalConfig>>,
 }
 
-async fn resolve_package(buf: Vec<u8>, config: &Arc<Mutex<GlobalConfig>>) -> Result<()> {
+async fn resolve_package(buf: Vec<u8>, config: &Arc<Mutex<GlobalConfig>>, from_addr: &SocketAddr, socket: Arc<UdpSocket>) -> Result<()> {
     // println!("in resolve_package {:?}",buf);
     let mut pack: UdpPackage = bincode::deserialize(&buf).unwrap();
+
+    // ### echoip server
+    if pack.cmd == 3 {
+        // let b = bincode::serialize(from_addr).unwrap();
+        let up = UdpPackage{
+            cmd: 1,
+            buf: bincode::serialize(from_addr).unwrap()
+        };
+        let up_byte = bincode::serialize(&up).unwrap();
+        // let pack: UdpPackage = bincode::deserialize(&bb).unwrap();
+        let _ret = socket.send_to(&up_byte, &from_addr).await?;
+        println!("from address: {}  say: {:?}", from_addr, pack.buf);
+    }
+    
+    // server -> node ip address
     if pack.cmd == 1 {
         let addr: SocketAddr = bincode::deserialize(&pack.buf).unwrap();
         {
@@ -33,6 +49,8 @@ async fn resolve_package(buf: Vec<u8>, config: &Arc<Mutex<GlobalConfig>>) -> Res
             }
         }
     }
+
+    // 
     if pack.cmd == 2 {
         let file_send: FileSend = bincode::deserialize(&pack.buf).unwrap();
         
@@ -61,11 +79,11 @@ impl Server {
         } = self;
 
         loop {
-            let (size, socket_addr) = socket.recv_from(&mut buf).await?;
+            let (size, from_addr) = socket.recv_from(&mut buf).await?;
             if size != 0 {
                 let mut new_buf: Vec<u8> = vec![0; size];
                 let _a = new_buf.clone_from_slice(&buf[..size]);
-                let _a = resolve_package(new_buf, &config).await?;
+                let _a = resolve_package(new_buf, &config, &from_addr, &socket).await?;
             }
             // First we check to see if there's a message we need to echo back.
             // If so then we try to send it back to the original source, waiting

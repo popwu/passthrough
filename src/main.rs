@@ -2,14 +2,14 @@ use bincode;
 use std::error::Error;
 
 use std::sync::Arc;
-use std::{env, io};
+use std::env;
 use tokio::net::UdpSocket;
 use tokio::sync::Mutex;
-use tokio::time::error::Elapsed;
-use std::net::SocketAddr;
+// use tokio::time::error::Elapsed;
+// use std::net::SocketAddr;
 
-mod keep;
-use keep::keepalive;
+mod task_keep;
+use task_keep::keepalive;
 
 mod server;
 use server::Server;
@@ -17,8 +17,8 @@ use server::Server;
 mod gconfig;
 use gconfig::GlobalConfig;
 
-mod sendfile;
-use sendfile::send_file;
+mod task_sendfile;
+use task_sendfile::send_file;
 
 mod protocol;
 use protocol::*;
@@ -27,8 +27,8 @@ use protocol::*;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     // transfer get filename | receive file
-
     // transfer ip:port filename | send file
+    // transfer echoip
 
     let local_addr: String;
     let action: String;
@@ -39,20 +39,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
         action = "get".to_string();
         local_addr = "0.0.0.0:8880".to_string();
         remote_addr = "".to_string();
-
-        // let filename: String = env::args().nth(2).unwrap();
-
-        
+    } else if args1 == "echoip".to_string() {
+        // echoip server 模式
+        action = "echoip".to_string();
+        local_addr = "0.0.0.0:8882".to_string();
+        remote_addr = "".to_string();
     } else {
         action = "send".to_string();
         local_addr = "0.0.0.0:8881".to_string();
         remote_addr = args1.to_string();
-
-        
-        // let socket = UdpSocket::bind(&local_addr).await?;
-
-        // send_file(filename, socket, remote_addr);
-
     }
     let filename: String = env::args().nth(2).unwrap();
     let _socket = UdpSocket::bind(&local_addr).await?;
@@ -66,6 +61,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         sleep_time: 60000, //180000,
         filename: filename.clone(),
         fp: None,
+        action: action.clone(),
     }));
     let lconfig = Arc::clone(&config);
 
@@ -80,13 +76,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         socket,
         buf: vec![0; 2048],
         to_send: None,
-        config: config,
+        config: config,        
     };
 
     // This starts the server task.
     server.run().await?;
-   
-    
-
     Ok(())
 }
