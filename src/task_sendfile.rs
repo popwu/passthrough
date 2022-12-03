@@ -1,14 +1,31 @@
 use anyhow::{Result, Ok};
 use std::sync::Arc;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
 use tokio::net::UdpSocket;
 use tokio::fs::{metadata, File};
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncSeekExt;
 use tokio::io::SeekFrom;
+use tokio::sync::Mutex;
+
+use crate::GlobalConfig;
 use crate::{UdpPackage, FileSend};
 use bincode;
 
-pub async fn send_file(filename: &String, socket:Arc<UdpSocket>, remote_addr: &String) -> Result<()>  {
+pub async fn send_file(lsocket: &Arc<UdpSocket>, config: &Arc<Mutex<GlobalConfig>>, remote_addr: &String) -> Result<()>  {
+    let remote_addr_s: SocketAddr = remote_addr.parse().unwrap();
+    let bridge_node_byte = bincode::serialize(&UdpPackage {
+        cmd: 4,
+        buf: bincode::serialize(&remote_addr_s).unwrap(),
+    })
+    .unwrap();
+    let _ret = lsocket.send_to(&bridge_node_byte, &config.lock().await.echo_server).await?;
+    Ok({})
+}
+
+pub async fn send_file_step2(socket: &Arc<UdpSocket>, config: &Arc<Mutex<GlobalConfig>>, remote_addr: &SocketAddr) -> Result<()>  {
+    let filename = &config.lock().await.filename;
     let file_size = metadata(filename).await.unwrap().len();
     let l = if file_size%1024 == 0 { file_size/1024} else { file_size/1024+1};
 
@@ -35,7 +52,7 @@ pub async fn send_file(filename: &String, socket:Arc<UdpSocket>, remote_addr: &S
             buf:file_send_byte,
         };
         let send_byte = bincode::serialize(&send).unwrap();
-        let _ret = socket.send_to(&send_byte, &remote_addr).await?;
+        let _ret = socket.send_to(&send_byte, remote_addr).await?;
     }
     println!("send is ok.");
     Ok({})

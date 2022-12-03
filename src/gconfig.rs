@@ -7,4 +7,5 @@ pub struct GlobalConfig {
     pub sleep_time: u64,
     pub filename: String,
     pub fp: Option<File>,
+    pub echo_server: String,
 }

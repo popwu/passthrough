@@ -11,6 +11,7 @@ use tokio::io::{AsyncReadExt, AsyncSeekExt, SeekFrom, AsyncWriteExt};
 
 use crate::GlobalConfig;
 use crate::{UdpPackage, FileSend};
+use crate::send_file_step2;
 
 
 pub struct Server {
@@ -20,7 +21,7 @@ pub struct Server {
     pub config: Arc<Mutex<GlobalConfig>>,
 }
 
-async fn resolve_package(buf: Vec<u8>, config: &Arc<Mutex<GlobalConfig>>, from_addr: &SocketAddr, socket: Arc<UdpSocket>) -> Result<()> {
+async fn resolve_package(buf: Vec<u8>, config: &Arc<Mutex<GlobalConfig>>, from_addr: &SocketAddr, socket: &Arc<UdpSocket>) -> Result<()> {
     // println!("in resolve_package {:?}",buf);
     let mut pack: UdpPackage = bincode::deserialize(&buf).unwrap();
 
@@ -36,8 +37,23 @@ async fn resolve_package(buf: Vec<u8>, config: &Arc<Mutex<GlobalConfig>>, from_a
         let _ret = socket.send_to(&up_byte, &from_addr).await?;
         println!("from address: {}  say: {:?}", from_addr, pack.buf);
     }
+    if pack.cmd == 4 {
+        if config.lock().await.action == "send".to_string() {
+            let _ret = send_file_step2(socket, config, from_addr).await?;
+        } else {
+            let addr: SocketAddr = bincode::deserialize(&pack.buf).unwrap();
+            let bridge_node_byte = bincode::serialize(&UdpPackage {
+                cmd: 4,
+                buf: bincode::serialize(&from_addr).unwrap(),
+            })
+            .unwrap();
+            let _ret = socket.send_to(&bridge_node_byte, addr).await?;
+            println!("from address: {}  bridge to: {:?}", from_addr, addr);
+        }
+    }
     
     // server -> node ip address
+
     if pack.cmd == 1 {
         let addr: SocketAddr = bincode::deserialize(&pack.buf).unwrap();
         {
