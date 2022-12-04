@@ -1,11 +1,21 @@
 use std::net::SocketAddr;
 use tokio::fs::File;
+use tokio::sync::Mutex;
+use tokio::sync::mpsc;
 
 pub struct GlobalConfig {
     pub action: String,
-    pub self_addr: Option<SocketAddr>,
+    pub self_addr: Mutex<Option<SocketAddr>>,
+    pub fp: Mutex<Option<File>>,
     pub sleep_time: u64,
-    pub filename: String,
-    pub fp: Option<File>,
+    pub filename: String,    
     pub echo_server: String,
+    // pub tx: mpsc::Sender<ReceiveBuf>, 
+    // pub rx: mpsc::Receiver<ReceiveBuf>,
+}
+
+#[derive(Debug)]
+pub struct ReceiveBuf {
+    pub from_addr: SocketAddr,
+    pub buf: Vec<u8>,
 }
