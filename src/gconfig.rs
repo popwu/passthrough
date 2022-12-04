@@ -1,8 +1,8 @@
 use std::net::SocketAddr;
 use tokio::fs::File;
 use tokio::sync::Mutex;
-use tokio::sync::mpsc;
 
+#[derive(Debug)]
 pub struct GlobalConfig {
     pub action: String,
     pub self_addr: Mutex<Option<SocketAddr>>,

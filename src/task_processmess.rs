@@ -2,8 +2,8 @@ use anyhow::{Ok, Result};
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use tokio::fs::{metadata, File};
-use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt, SeekFrom};
+use tokio::fs::File;
+use tokio::io::{AsyncSeekExt, AsyncWriteExt, SeekFrom};
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 

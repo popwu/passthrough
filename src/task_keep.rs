@@ -1,7 +1,6 @@
 use anyhow::Result;
 use std::sync::Arc;
 use tokio::net::UdpSocket;
-use tokio::sync::Mutex;
 use tokio::time::{sleep, Duration};
 
 use crate::GlobalConfig;
