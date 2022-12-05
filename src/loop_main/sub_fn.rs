@@ -4,15 +4,13 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::collections::HashMap;
 
-use tokio::fs::{metadata, File};
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncSeekExt;
 use tokio::io::SeekFrom;
 use tokio::net::UdpSocket;
 
-// use crate::GlobalConfig;
-// use crate::gconfig::Task;
-use crate::{GlobalConfig, FileSend, UdpPackage, Task, FileInfo, NotReceived};
+use crate::Task;
+use crate::loop_main::{FileInfo, FileSend, UdpPackage, NotReceived};
 use bincode;
 
 

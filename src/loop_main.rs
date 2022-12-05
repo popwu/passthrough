@@ -9,13 +9,47 @@ use tokio::io::{AsyncSeekExt, AsyncWriteExt, SeekFrom};
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
+use tokio::time::{sleep, Duration};
 
 use crate::gconfig::ReceiveBuf;
-use crate::protocol::FileInfo;
-use crate::{FileSend, GlobalConfig, UdpPackage, Task, ReceiveFileTask, NotReceived};
+use crate::{Task, ReceiveFileTask};
 
 mod sub_fn;
 use sub_fn::*;
+
+mod protocol;
+use protocol::{FileInfo, FileSend, UdpPackage, NotReceived};
+
+pub async fn build_tunnel(
+    lsocket: Arc<UdpSocket>,
+    echo_server: SocketAddr,
+    remote_addr: SocketAddr,
+) -> Result<()> {
+    // 制造隧道
+    println!("### 发送建立隧道信息");
+    let bridge_node_byte = bincode::serialize(&UdpPackage {
+        cmd: 4,
+        buf: bincode::serialize(&remote_addr).unwrap(),
+    })
+    .unwrap();
+    let _ret = lsocket
+        .send_to(&bridge_node_byte, echo_server)
+        .await?;
+    // };
+    Ok({})
+}
+
+pub async fn keepalive(lsocket: Arc<UdpSocket>, echo_server: SocketAddr, sleep_time: u64) -> Result<()> {
+    let who_am_i_byte = bincode::serialize(&UdpPackage {
+        cmd: 3,
+        buf: vec![0],
+    })
+    .unwrap();    
+    loop {
+        let _ret = lsocket.send_to(&who_am_i_byte, echo_server).await?;
+        let _ret = sleep(Duration::from_millis(sleep_time)).await;
+    }
+}
 
 // 1 server -> node 接收方: 获得自己的ip
 // 2 node -> node   发送方: 文件切片
@@ -28,10 +62,13 @@ use sub_fn::*;
 
 pub async fn main_loop(
     socket: Arc<UdpSocket>, 
-    config: Arc<GlobalConfig>, 
+    // config: Arc<GlobalConfig>, 
     mut rx: mpsc::Receiver<ReceiveBuf>,
     mut tasks: HashMap<Uuid, Task>,
+    action: String,
 ) -> Result<()> {
+    let mut self_addr: Option<SocketAddr> = None;
+
     while let Some(message) = rx.recv().await {
         // println!("GOT = {}", message);
         let ReceiveBuf {
@@ -55,7 +92,7 @@ pub async fn main_loop(
             println!("from address: {}  say: {:?}", from_addr, pack.buf);
         }
         if pack.cmd == 4 {
-            if config.action == "send".to_string() {
+            if action == "send".to_string() {
                 let _ret = send_file_for_remote_addr(&socket, &from_addr, &tasks).await?;
             } else {
                 let addr: SocketAddr = bincode::deserialize(&pack.buf).unwrap();
@@ -74,10 +111,9 @@ pub async fn main_loop(
             let addr: SocketAddr = bincode::deserialize(&pack.buf).unwrap();
 
             // let mut config = config.lock().await;
-            if Some(addr) != *config.self_addr.lock().await {
+            if Some(addr) != self_addr {
                 println!("new address: {:?}", addr);
-                println!("sleep: {:?}", config.sleep_time);
-                *config.self_addr.lock().await = Some(addr);
+                self_addr = Some(addr);
             }
         }
 

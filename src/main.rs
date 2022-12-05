@@ -1,5 +1,4 @@
-use anyhow::Ok;
-use anyhow::Result;
+use anyhow::{Result, Ok};
 use uuid::Uuid;
 use std::env;
 use std::collections::HashMap;
@@ -9,15 +8,8 @@ use std::path::Path;
 
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
-use tokio::sync::Mutex;
 use tokio::fs::File;
 use tokio::fs::metadata;
-
-mod task_keep;
-use task_keep::keepalive;
-
-mod sub_fn;
-use sub_fn::*;
 
 mod loop_main;
 use loop_main::*;
@@ -28,20 +20,15 @@ use loop_udp::*;
 mod gconfig;
 use gconfig::*;
 
-mod protocol;
-use protocol::*;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // user's guidance
-    // transfer get | receive file
-    // transfer send ip:port filename | send file
-    // transfer echoip
-
     let local_addr: String;
     let action: String;
     let mut remote_addr: String;
     let mut filename: String;
+    let ECHO_SERVER: SocketAddr = "127.0.0.1:8882".parse().unwrap();
+    const SLEEP_TIME: u64 = 60000;
 
     remote_addr = "".to_string();
     filename = "".to_string();
@@ -71,27 +58,17 @@ async fn main() -> Result<()> {
     let socket = Arc::new(socket);
     println!("Listening on: {}", socket.local_addr()?);
 
-    // build config
-    let config = Arc::new(GlobalConfig {
-        self_addr: Mutex::new(None),
-        fp: Mutex::new(None),
-        sleep_time: 60000, //180000,
-        filename: "".to_string(),
-        action: action.clone(),
-        echo_server: "127.0.0.1:8882".to_string(),
-        // tasks: Mutex::new(HashMap::new()),
-    });
 
     // task var
     let (tx, rx): (mpsc::Sender<ReceiveBuf>, mpsc::Receiver<ReceiveBuf>) = mpsc::channel(1024);
     let mut tasks:HashMap<Uuid, Task> = HashMap::new();
 
     // sub task
-    let lconfig = Arc::clone(&config);
     let lsocket = socket.clone();
-    if action == "get".to_string() {
-        tokio::spawn(async move { keepalive(&lsocket, &lconfig).await });
-    } else if action == "send".to_string() {
+    let echo_server = ECHO_SERVER.clone();
+    tokio::spawn(async move { keepalive(lsocket, echo_server, SLEEP_TIME).await });
+
+    if action == "send".to_string() {
         // 添加一个发送文件的任务
         let file_id = Uuid::new_v4();
         let remote_addr: SocketAddr = remote_addr.parse().unwrap();
@@ -109,14 +86,16 @@ async fn main() -> Result<()> {
         let _ret = tasks.insert(file_id, Task::SendFile(sft));
 
         // 开通隧道
-        tokio::spawn(async move { build_tunnel(&lsocket, &lconfig, &remote_addr).await });
+        let tsocket = socket.clone();
+        let echo_server = ECHO_SERVER.clone();
+        tokio::spawn(async move { build_tunnel(tsocket, echo_server, remote_addr).await });
     }
 
     let rp_socket = socket.clone();
-    let rp_config = Arc::clone(&config);
-    tokio::spawn(async move { main_loop(rp_socket, rp_config, rx, tasks).await });
+    // let rp_config = Arc::clone(&config);
+    tokio::spawn(async move { main_loop(rp_socket, rx, tasks, action).await });
 
     // main task
-    let _ret = loop_udp(socket, config, tx).await?;
+    let _ret = loop_udp(socket, tx).await?;
     Ok(())
 }

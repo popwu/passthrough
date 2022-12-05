@@ -5,7 +5,7 @@ use tokio::net::UdpSocket;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
-use crate::{GlobalConfig, ReceiveBuf};
+use crate::ReceiveBuf;
 
 // pub struct Server {
 //     pub socket: Arc<tokio::net::UdpSocket>,
@@ -17,7 +17,6 @@ use crate::{GlobalConfig, ReceiveBuf};
 // impl Server {
 pub async fn loop_udp(
     socket: Arc<UdpSocket>,
-    _config: Arc<GlobalConfig>,
     tx: mpsc::Sender<ReceiveBuf>,
 ) -> Result<()> {
 
