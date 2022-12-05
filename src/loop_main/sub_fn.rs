@@ -48,11 +48,11 @@ pub async fn send_file_info(
         // let filename = String::from_utf8(task.filename.clone()).unwrap();
         let remote_addr = task.remote_addr;
         let file_size = task.size;
-        let l = if file_size % 1024 == 0 {
-            file_size / 1024
-        } else {
-            file_size / 1024 + 1
-        };
+        // let l = if file_size % 1024 == 0 {
+        //     file_size / 1024
+        // } else {
+        //     file_size / 1024 + 1
+        // };
 
         println!("### 发送文件信息{:?}", file_id);
 

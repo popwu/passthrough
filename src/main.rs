@@ -27,7 +27,7 @@ async fn main() -> Result<()> {
     let action: String;
     let mut remote_addr: String;
     let mut filename: String;
-    let ECHO_SERVER: SocketAddr = "127.0.0.1:8882".parse().unwrap();
+    let echo_server: SocketAddr = "127.0.0.1:8882".parse().unwrap();
     const SLEEP_TIME: u64 = 60000;
 
     remote_addr = "".to_string();
@@ -64,9 +64,12 @@ async fn main() -> Result<()> {
     let mut tasks:HashMap<Uuid, Task> = HashMap::new();
 
     // sub task
-    let lsocket = socket.clone();
-    let echo_server = ECHO_SERVER.clone();
-    tokio::spawn(async move { keepalive(lsocket, echo_server, SLEEP_TIME).await });
+    
+    if action != "echoip" {
+        let lsocket = socket.clone();
+        let echo_server = echo_server.clone();
+        tokio::spawn(async move { keepalive(lsocket, echo_server, SLEEP_TIME).await });
+    }
 
     if action == "send".to_string() {
         // 添加一个发送文件的任务
@@ -87,7 +90,7 @@ async fn main() -> Result<()> {
 
         // 开通隧道
         let tsocket = socket.clone();
-        let echo_server = ECHO_SERVER.clone();
+        let echo_server = echo_server.clone();
         tokio::spawn(async move { build_tunnel(tsocket, echo_server, remote_addr).await });
     }
 
