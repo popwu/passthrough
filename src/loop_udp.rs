@@ -15,7 +15,7 @@ use crate::{GlobalConfig, ReceiveBuf};
 // }
 
 // impl Server {
-pub async fn server_run(
+pub async fn loop_udp(
     socket: Arc<UdpSocket>,
     _config: Arc<GlobalConfig>,
     tx: mpsc::Sender<ReceiveBuf>,

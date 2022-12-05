@@ -35,7 +35,7 @@ pub struct GlobalConfig {
     pub sleep_time: u64,
     pub filename: String,
     pub echo_server: String,
-    pub tasks: Mutex<HashMap<Uuid, Task>>,
+    // pub tasks: Mutex<HashMap<Uuid, Task>>,
     // pub tx: mpsc::Sender<ReceiveBuf>, 
     // pub rx: mpsc::Receiver<ReceiveBuf>,
 }

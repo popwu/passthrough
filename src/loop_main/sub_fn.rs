@@ -2,6 +2,7 @@ use anyhow::{Ok, Result};
 use uuid::Uuid;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::collections::HashMap;
 
 use tokio::fs::{metadata, File};
 use tokio::io::AsyncReadExt;
@@ -14,34 +15,17 @@ use tokio::net::UdpSocket;
 use crate::{GlobalConfig, FileSend, UdpPackage, Task, FileInfo, NotReceived};
 use bincode;
 
-pub async fn build_tunnel(
-    lsocket: &Arc<UdpSocket>,
-    config: &Arc<GlobalConfig>,
-    remote_addr: &SocketAddr,
-) -> Result<()> {
-    // 制造隧道
-    println!("### 发送建立隧道信息");
-    let bridge_node_byte = bincode::serialize(&UdpPackage {
-        cmd: 4,
-        buf: bincode::serialize(&remote_addr).unwrap(),
-    })
-    .unwrap();
-    let _ret = lsocket
-        .send_to(&bridge_node_byte, &config.echo_server)
-        .await?;
-    // };
-    Ok({})
-}
 
 pub async fn send_file_for_remote_addr(
     socket: &Arc<UdpSocket>,
-    config: &Arc<GlobalConfig>,
+    // config: &Arc<GlobalConfig>,
     remote_addr: &SocketAddr,
+    tasks: &HashMap<Uuid, Task>,
 ) -> Result<()> {
     println!("### {:?} 回应了隧道，隧道已经建立", remote_addr);
     // let tasks = &*config.tasks.lock().await;
     let mut  file_ids: Vec<Uuid> = Vec::new();
-    for (file_id, vtask) in  &*config.tasks.lock().await{
+    for (file_id, vtask) in  tasks {
         if let Task::SendFile(task) = vtask {
             if task.remote_addr == *remote_addr {
                 file_ids.insert(0, file_id.clone());
@@ -50,7 +34,7 @@ pub async fn send_file_for_remote_addr(
     };
     for file_id in file_ids
     {
-        let _ret = send_file_info(socket, config, &file_id).await?;
+        let _ret = send_file_info(socket, &file_id, tasks).await?;
     };
     Ok({})
 
@@ -58,10 +42,11 @@ pub async fn send_file_for_remote_addr(
 
 pub async fn send_file_info(
     socket: &Arc<UdpSocket>,
-    config: &Arc<GlobalConfig>,
+    // config: &Arc<GlobalConfig>,
     file_id: &Uuid,
+    tasks: &HashMap<Uuid, Task>,
 ) -> Result<()> {
-    if let Task::SendFile(task) = config.tasks.lock().await.get(&file_id).unwrap() {
+    if let Task::SendFile(task) = tasks.get(&file_id).unwrap() {
         // let filename = String::from_utf8(task.filename.clone()).unwrap();
         let remote_addr = task.remote_addr;
         let file_size = task.size;
@@ -93,12 +78,13 @@ pub async fn send_file_info(
 
 pub async fn send_file(
     socket: &Arc<UdpSocket>,
-    config: &Arc<GlobalConfig>,
+    // config: &Arc<GlobalConfig>,
     file_id: &Uuid,
+    tasks: &mut HashMap<Uuid, Task>,
 ) -> Result<()> {
     // 一次性发送所有内容
     println!("### 一次性发送所有内容 {:?}", file_id);
-    if let Task::SendFile(task) = config.tasks.lock().await.get_mut(&file_id).unwrap() {
+    if let Task::SendFile(task) = tasks.get_mut(&file_id).unwrap() {
         // let filename = String::from_utf8(task.filename.clone()).unwrap();
         let remote_addr = task.remote_addr;
         let file_size = task.size;
@@ -149,12 +135,13 @@ pub async fn send_file(
 
 pub async fn send_not_received(
     socket: &Arc<UdpSocket>,
-    config: &Arc<GlobalConfig>,
+    // config: &Arc<GlobalConfig>,
     not_received: &NotReceived,
+    tasks: &mut HashMap<Uuid, Task>,
 ) -> Result<()> {
     // let (id, not_received} = not_received;
     // 一次性发送所有内容
-    if let Task::SendFile(task) = config.tasks.lock().await.get_mut(&not_received.id).unwrap() {
+    if let Task::SendFile(task) = tasks.get_mut(&not_received.id).unwrap() {
         // let f = task.fp;
         let remote_addr = task.remote_addr;
         for i in &not_received.not_received {

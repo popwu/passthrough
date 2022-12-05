@@ -2,6 +2,7 @@ use anyhow::{Ok, Result};
 use uuid::Uuid;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::collections::HashMap;
 
 use tokio::fs::File;
 use tokio::io::{AsyncSeekExt, AsyncWriteExt, SeekFrom};
@@ -11,7 +12,10 @@ use tokio::sync::Mutex;
 
 use crate::gconfig::ReceiveBuf;
 use crate::protocol::FileInfo;
-use crate::{FileSend, GlobalConfig, UdpPackage, send_file_for_remote_addr,send_file,send_not_received, Task, ReceiveFileTask, NotReceived};
+use crate::{FileSend, GlobalConfig, UdpPackage, Task, ReceiveFileTask, NotReceived};
+
+mod sub_fn;
+use sub_fn::*;
 
 // 1 server -> node 接收方: 获得自己的ip
 // 2 node -> node   发送方: 文件切片
@@ -22,7 +26,12 @@ use crate::{FileSend, GlobalConfig, UdpPackage, send_file_for_remote_addr,send_f
 // 7 node -> node   接收方: 我要这个文件
 // 8 node -> node   接收方: 还有些我没有收到
 
-pub async fn resolve_package(socket: Arc<UdpSocket>, config: Arc<GlobalConfig>, mut rx: mpsc::Receiver<ReceiveBuf>) -> Result<()> {
+pub async fn main_loop(
+    socket: Arc<UdpSocket>, 
+    config: Arc<GlobalConfig>, 
+    mut rx: mpsc::Receiver<ReceiveBuf>,
+    mut tasks: HashMap<Uuid, Task>,
+) -> Result<()> {
     while let Some(message) = rx.recv().await {
         // println!("GOT = {}", message);
         let ReceiveBuf {
@@ -47,7 +56,7 @@ pub async fn resolve_package(socket: Arc<UdpSocket>, config: Arc<GlobalConfig>, 
         }
         if pack.cmd == 4 {
             if config.action == "send".to_string() {
-                let _ret = send_file_for_remote_addr(&socket, &config, &from_addr).await?;
+                let _ret = send_file_for_remote_addr(&socket, &from_addr, &tasks).await?;
             } else {
                 let addr: SocketAddr = bincode::deserialize(&pack.buf).unwrap();
                 let bridge_node_byte = bincode::serialize(&UdpPackage {
@@ -76,7 +85,7 @@ pub async fn resolve_package(socket: Arc<UdpSocket>, config: Arc<GlobalConfig>, 
         if pack.cmd == 2 {
             let file_send: FileSend = bincode::deserialize(&pack.buf).unwrap();
             // println!("### 收到切片 {:?}", file_send.index);
-            if let Task::ReceiveFile(task) = config.tasks.lock().await.get_mut(&file_send.id).unwrap() {
+            if let Task::ReceiveFile(task) = tasks.get_mut(&file_send.id).unwrap() {
                 // let _ret = task.received; //.(file_send.index as usize);
                 task.received.remove(task.received.iter().position(|x| *x == file_send.index).expect("not found"));
                 // fp = task.fp;
@@ -123,7 +132,7 @@ pub async fn resolve_package(socket: Arc<UdpSocket>, config: Arc<GlobalConfig>, 
                 fp: fp,
             };
             
-            let _ret = config.tasks.lock().await.insert(file_id, Task::ReceiveFile(sft));
+            let _ret = tasks.insert(file_id, Task::ReceiveFile(sft));
 
             // 返回一个许可
             println!("### 返回我要这个文件的许可 {:?}", file_id);
@@ -136,13 +145,13 @@ pub async fn resolve_package(socket: Arc<UdpSocket>, config: Arc<GlobalConfig>, 
         }
         if pack.cmd == 7 {
             let file_id: Uuid = bincode::deserialize(&pack.buf).unwrap();
-            let _ret = send_file(&socket, &config, &file_id).await?;
+            let _ret = send_file(&socket, &file_id, &mut tasks).await?;
         }
         if pack.cmd == 5 {
             let file_id: Uuid = bincode::deserialize(&pack.buf).unwrap();
             let received;
             // let t = config.tasks.lock().await.get(&file_id).unwrap();
-            if let Task::ReceiveFile(task) = config.tasks.lock().await.get(&file_id).unwrap() {
+            if let Task::ReceiveFile(task) = tasks.get(&file_id).unwrap() {
                 received = task.received.clone();
             } else {
                 received = Vec::new();
@@ -161,15 +170,15 @@ pub async fn resolve_package(socket: Arc<UdpSocket>, config: Arc<GlobalConfig>, 
                 let _ret = socket.send_to(&not_received_byte, from_addr).await?;
             } else {
                 // 结束
-                if let Task::ReceiveFile(task) = config.tasks.lock().await.get_mut(&file_id).unwrap() {
-                    let _ret = &task.fp.flush().await.unwrap();
-                    let _ret = &task.fp.try_clone().await.unwrap();
+                if let Task::ReceiveFile(task) = tasks.get_mut(&file_id).unwrap() {
+                    let _ret = task.fp.flush().await.unwrap();
+                    let _ret = task.fp.try_clone().await.unwrap();
                 }
             }
         }
         if pack.cmd == 8 {
             let not_received: NotReceived = bincode::deserialize(&pack.buf).unwrap();
-            let _ret = send_not_received(&socket, &config, &not_received).await.unwrap();
+            let _ret = send_not_received(&socket, &not_received, &mut tasks).await.unwrap();
         }
     }
     Ok(())
